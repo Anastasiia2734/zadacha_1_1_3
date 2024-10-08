@@ -1,6 +1,6 @@
 package jm.task.core.jdbc.dao;
 
-import com.sun.xml.bind.v2.model.core.ID;
+
 import jm.task.core.jdbc.model.User;
 import jm.task.core.jdbc.util.Util;
 
@@ -8,96 +8,58 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-import static javax.swing.UIManager.getString;
 
-public class UserDaoJDBCImpl extends Util implements UserDao {
-private static final String CREATE_TABLE = "CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(20), lastname VARCHAR(20), age TINYINT NOT NULL)" ;
-private static final String CREATE_USER = "INSERT INTO users (name, lastName, age) values (?, ?, ?)";
-private static final String DELETE_USER = "DELETE FROM users WHERE id = ?";
-private static final String GET_ALL_USERS = "SELECT * FROM users";
-private static final String DROP_TABLE = "DROP TABLE IF EXISTS users";
-private static final String CLEAR_TABLE = "DELETE FROM users";
-Connection connection = Util.getConnection();
+public class UserDaoJDBCImpl implements UserDao {
+    private final Connection connection;
 
     public UserDaoJDBCImpl() {
-
+        this.connection = Util.getConnection();
     }
 
+    @Override
     public void createUsersTable() {
-        Statement statement = null;
-        try {
-           statement = connection.createStatement();
-           statement.executeUpdate(CREATE_TABLE);
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                if (statement != null) {
-                    statement.close();
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
+        executeUpdate("CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(20), lastname VARCHAR(20), age TINYINT NOT NULL)");
     }
 
+    @Override
     public void dropUsersTable() {
-        Statement statement = null;
-        try {
-            statement = connection.createStatement();
-            statement.executeUpdate(DROP_TABLE);
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            if (statement != null) {
-                try {
-                    statement.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
+        executeUpdate("DROP TABLE IF EXISTS users");
     }
 
+    @Override
     public void saveUser(String name, String lastName, byte age) {
-PreparedStatement preparedStatement = null;
-try {
-   preparedStatement = connection.prepareStatement(CREATE_USER);
-   preparedStatement.setString(1, name);
-   preparedStatement.setString(2, lastName);
-   preparedStatement.setByte(3, age);
-   preparedStatement.executeUpdate();
-} catch (SQLException e) {
-    e.printStackTrace();
-} finally {
-    if (preparedStatement != null) {
+        PreparedStatement preparedStatement = null;
         try {
-            preparedStatement.close();
+            preparedStatement = connection.prepareStatement("INSERT INTO users (name, lastName, age) values (?, ?, ?)");
+            preparedStatement.setString(1, name);
+            preparedStatement.setString(2, lastName);
+            preparedStatement.setByte(3, age);
+            preparedStatement.executeUpdate();
         } catch (SQLException e) {
+            rollback();
             e.printStackTrace();
         }
     }
-}
-    }
 
+    @Override
     public void removeUserById(long id) {
-PreparedStatement preparedStatement = null;
-try {
-    preparedStatement = connection.prepareStatement(DELETE_USER);
-    preparedStatement.setLong(1, id);
-} catch (SQLException e) {
-    e.printStackTrace();
-}
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement("DELETE FROM users WHERE id = ?");
+            preparedStatement.setLong(1, id);
+            preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+            rollback();
+            e.printStackTrace();
+        }
     }
 
+
+    @Override
     public List<User> getAllUsers() {
         List<User> users = new ArrayList<>();
-        PreparedStatement preparedStatement = null;
-        ResultSet resultSet = null;
         try {
-            preparedStatement = connection.prepareStatement(GET_ALL_USERS);
-            //preparedStatement.executeQuery();
-            resultSet = preparedStatement.executeQuery();
+            PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM users");
+            ResultSet resultSet = preparedStatement.executeQuery();
             while (resultSet.next()) {
                 User userObj = new User();
                 userObj.setId(resultSet.getLong("id"));
@@ -106,31 +68,34 @@ try {
                 userObj.setAge((byte) resultSet.getInt("age"));
                 users.add(userObj);
             }
-
         } catch (SQLException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                if (resultSet != null) {
-                    resultSet.close();
-                }
-                if (preparedStatement != null) {
-                    preparedStatement.close();
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            return users;
+        }
+        return users;
+    }
+
+    @Override
+    public void cleanUsersTable() {
+        executeUpdate("DELETE FROM users");
+    }
+
+    private void executeUpdate(String request) {
+        Statement statement = null;
+        try {
+            statement = connection.createStatement();
+            statement.executeUpdate(request);
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
     }
 
-    public void cleanUsersTable() {
-PreparedStatement preparedStatement = null;
-try {
-    preparedStatement = connection.prepareStatement(CLEAR_TABLE);
-    preparedStatement.execute();
-} catch (SQLException e) {
-    e.printStackTrace();
-}
+    private void rollback() {
+        if (connection != null) {
+            try {
+                connection.rollback();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
